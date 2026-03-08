@@ -1,0 +1,59 @@
+{
+  "order_lifecycle_event": {
+    "type": "record",
+    "name": "OrderLifecycleEvent",
+    "namespace": "com.fooddelivery.v1",
+    "doc": "One record per order state transition. Tracks an order from placement to delivery or cancellation.",
+    "fields": [
+      { "name": "event_id",               "type": "string",  "doc": "Unique event ID — used for deduplication." },
+      { "name": "order_id",               "type": "string",  "doc": "Stable order ID — join key with courier_location_event." },
+      { "name": "restaurant_id",          "type": "string",  "doc": "Fulfilling restaurant — join key for restaurant reference table." },
+      { "name": "courier_id",             "type": ["null", "string"], "default": null, "doc": "Null until COURIER_ASSIGNED." },
+      { "name": "zone_id",                "type": "string",  "doc": "Delivery zone — join key for zone reference table." },
+      { "name": "event_type",             "type": { "type": "enum", "name": "OrderEventType",
+          "symbols": ["ORDER_PLACED","ORDER_CONFIRMED","ORDER_PREPARING","COURIER_ASSIGNED",
+                      "COURIER_PICKED_UP","ORDER_DELIVERED","ORDER_CANCELLED"] },
+        "doc": "State machine transition. Illegal sequences are anomalies." },
+      { "name": "event_time",             "type": { "type": "long", "logicalType": "timestamp-millis" },
+        "doc": "When the event actually occurred — basis for watermarks and event-time windows." },
+      { "name": "ingestion_time",         "type": { "type": "long", "logicalType": "timestamp-millis" },
+        "doc": "When the event arrived at the broker. Delta vs event_time = out-of-order delay." },
+      { "name": "order_value_cents",      "type": "int",     "doc": "Order total in cents (avoids float rounding)." },
+      { "name": "delivery_fee_cents",     "type": "int" },
+      { "name": "item_count",             "type": "int" },
+      { "name": "payment_method",         "type": "string",  "doc": "CREDIT_CARD | DEBIT_CARD | DIGITAL_WALLET | CASH" },
+      { "name": "platform",               "type": "string",  "doc": "IOS | ANDROID | WEB" },
+      { "name": "is_duplicate",           "type": "boolean", "default": false, "doc": "Producer-side retry flag — use for dedup operators." },
+      { "name": "estimated_delivery_time","type": ["null", { "type": "long", "logicalType": "timestamp-millis" }], "default": null },
+      { "name": "actual_delivery_time",   "type": ["null", { "type": "long", "logicalType": "timestamp-millis" }], "default": null },
+      { "name": "prep_duration_seconds",  "type": ["null", "int"], "default": null, "doc": "Negative or >7200 = anomaly." },
+      { "name": "delivery_duration_seconds", "type": ["null", "int"], "default": null },
+      { "name": "customer_rating",        "type": ["null", "int"], "default": null, "doc": "1–5. May arrive late / out-of-order." },
+      { "name": "cancellation_reason",    "type": ["null", "string"], "default": null }
+    ]
+  },
+
+  "courier_location_event": {
+    "type": "record",
+    "name": "CourierLocationEvent",
+    "namespace": "com.fooddelivery.v1",
+    "doc": "High-frequency GPS ping from courier mobile app (~every 15s per courier).",
+    "fields": [
+      { "name": "event_id",       "type": "string",  "doc": "Unique ping ID — used for deduplication." },
+      { "name": "courier_id",     "type": "string",  "doc": "Join key with order_lifecycle_event and courier reference table." },
+      { "name": "order_id",       "type": ["null", "string"], "default": null, "doc": "Active order. Null when idle." },
+      { "name": "zone_id",        "type": "string",  "doc": "Current zone (derived server-side from lat/lon)." },
+      { "name": "event_time",     "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "GPS device timestamp — event-time." },
+      { "name": "ingestion_time", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Broker arrival time. Delta = network latency / late arrival." },
+      { "name": "latitude",       "type": "double" },
+      { "name": "longitude",      "type": "double" },
+      { "name": "speed_kmh",      "type": "double",  "doc": "Values >150 km/h are anomalous." },
+      { "name": "heading_degrees","type": "double" },
+      { "name": "courier_status", "type": "string",  "doc": "ONLINE_IDLE | ONLINE_PICKUP | ONLINE_DELIVERING | OFFLINE" },
+      { "name": "vehicle_type",   "type": "string",  "doc": "BICYCLE | MOTORCYCLE | CAR | SCOOTER" },
+      { "name": "battery_pct",    "type": "int",     "doc": "Device battery 0–100. Low battery correlates with OFFLINE events." },
+      { "name": "network_type",   "type": "string",  "doc": "5G | 4G | 3G | NO_SIGNAL. NO_SIGNAL = source of GPS gaps." },
+      { "name": "is_duplicate",   "type": "boolean", "default": false }
+    ]
+  }
+}
