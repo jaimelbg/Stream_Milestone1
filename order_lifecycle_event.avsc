@@ -7,7 +7,7 @@
     {
       "name": "event_id",
       "type": "string",
-      "doc": "Unique event ID \u2014 used for deduplication."
+      "doc": "Unique event ID — used for deduplication."
     },
     {
       "name": "order_id",
@@ -59,12 +59,12 @@
       "doc": "When the event actually occurred \u2014 basis for watermarks and event-time windows."
     },
     {
-      "name": "ingestion_time",
+      "name": "processing_time",
       "type": {
         "type": "long",
         "logicalType": "timestamp-millis"
       },
-      "doc": "When the event arrived at the broker. Delta vs event_time = out-of-order delay."
+      "doc": "When the event arrived at the pipeline (processing time). Delta vs event_time = out-of-order delay."
     },
     {
       "name": "order_value_cents",
@@ -135,19 +135,21 @@
       "default": null
     },
     {
-      "name": "customer_rating",
-      "type": [
-        "null",
-        "int"
-      ],
-      "default": null,
-      "doc": "1\u20135. May arrive late / out-of-order."
-    },
-    {
       "name": "cancellation_reason",
       "type": [
         "null",
-        "string"
+        {
+          "type": "enum",
+          "name": "CancellationReason",
+          "symbols": [
+            "CUSTOMER_CANCELLED",
+            "RESTAURANT_REJECTED",
+            "NO_COURIER_AVAILABLE",
+            "PAYMENT_FAILED",
+            "TIMEOUT"
+          ],
+          "doc": "Reason for cancellation — populated only on ORDER_CANCELLED events."
+        }
       ],
       "default": null
     }

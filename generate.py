@@ -154,7 +154,7 @@ def generate_order_events(n_orders, restaurants, couriers, rng):
         if cancelled and rng.random() < 0.5:
             events.append(make_evt("ORDER_CANCELLED",
                                    t1 + timedelta(seconds=rng.randint(10, 120)),
-                                   {"cancellation_reason": "CUSTOMER_REQUESTED"}))
+                                   {"cancellation_reason": "CUSTOMER_CANCELLED"}))
             continue
 
         # ORDER_PREPARING (+1–2 min)
@@ -183,13 +183,11 @@ def generate_order_events(n_orders, restaurants, couriers, rng):
         if rng.random() < PROB_IMPOSSIBLE_DUR:
             del_s = rng.choice([-30, 14400])   # anomaly
         t5 = t4 + timedelta(seconds=abs(del_s))
-        rating = rng.choices([1,2,3,4,5], weights=[0.03,0.05,0.12,0.35,0.45])[0]
         events.append(make_evt("ORDER_DELIVERED", t5,
                                {"prep_duration_seconds": prep_s,
                                 "delivery_duration_seconds": del_s,
                                 "actual_delivery_time": ts(t5),
-                                "estimated_delivery_time": ts(eta),
-                                "customer_rating": rating}))
+                                "estimated_delivery_time": ts(eta)}))
 
     events.sort(key=lambda e: e["event_time"])
     return events
@@ -384,8 +382,8 @@ ORDER_SCHEMA = {
         {"name": "actual_delivery_time",  "type": ["null",{"type":"long","logicalType":"timestamp-millis"}], "default": None},
         {"name": "prep_duration_seconds", "type": ["null","int"], "default": None},
         {"name": "delivery_duration_seconds","type": ["null","int"], "default": None},
-        {"name": "customer_rating",       "type": ["null","int"], "default": None},
-        {"name": "cancellation_reason",   "type": ["null","string"], "default": None},
+        {"name": "cancellation_reason",   "type": ["null", {"type": "enum", "name": "CancellationReason",
+            "symbols": ["CUSTOMER_CANCELLED","RESTAURANT_REJECTED","NO_COURIER_AVAILABLE","PAYMENT_FAILED","TIMEOUT"]}], "default": None},
     ]
 }
 
@@ -403,8 +401,10 @@ LOCATION_SCHEMA = {
         {"name": "longitude",      "type": "double"},
         {"name": "speed_kmh",      "type": "double"},
         {"name": "heading_degrees","type": "double"},
-        {"name": "courier_status", "type": "string"},
-        {"name": "vehicle_type",   "type": "string"},
+        {"name": "courier_status", "type": {"type": "enum", "name": "CourierStatus",
+            "symbols": ["ONLINE_IDLE","ONLINE_PICKUP","ONLINE_DELIVERING","OFFLINE"]}},
+        {"name": "vehicle_type",   "type": {"type": "enum", "name": "VehicleType",
+            "symbols": ["BICYCLE","MOTORCYCLE","CAR","SCOOTER"]}},
         {"name": "battery_pct",    "type": "int"},
         {"name": "network_type",   "type": "string"},
         {"name": "is_duplicate",   "type": "boolean", "default": False},

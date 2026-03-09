@@ -5,9 +5,15 @@
   "doc": "High-frequency GPS ping from courier mobile app (~every 15s per courier).",
   "fields": [
     {
+      "name": "schema_version",
+      "type": "string",
+      "default": "1.0.0",
+      "doc": "Schema version for evolution tracking."
+    },
+    {
       "name": "event_id",
       "type": "string",
-      "doc": "Unique ping ID \u2014 used for deduplication."
+      "doc": "Unique ping ID — used for deduplication."
     },
     {
       "name": "courier_id",
@@ -16,12 +22,9 @@
     },
     {
       "name": "order_id",
-      "type": [
-        "null",
-        "string"
-      ],
+      "type": ["null", "string"],
       "default": null,
-      "doc": "Active order. Null when idle."
+      "doc": "Active order. Null when courier is idle."
     },
     {
       "name": "zone_id",
@@ -30,19 +33,13 @@
     },
     {
       "name": "event_time",
-      "type": {
-        "type": "long",
-        "logicalType": "timestamp-millis"
-      },
-      "doc": "GPS device timestamp \u2014 event-time."
+      "type": { "type": "long", "logicalType": "timestamp-millis" },
+      "doc": "GPS device timestamp — event-time. Basis for watermarks."
     },
     {
-      "name": "ingestion_time",
-      "type": {
-        "type": "long",
-        "logicalType": "timestamp-millis"
-      },
-      "doc": "Broker arrival time. Delta = network latency / late arrival."
+      "name": "processing_time",
+      "type": { "type": "long", "logicalType": "timestamp-millis" },
+      "doc": "When the event arrived at the pipeline (processing time). Delta vs event_time = late arrival delay."
     },
     {
       "name": "latitude",
@@ -63,28 +60,41 @@
     },
     {
       "name": "courier_status",
-      "type": "string",
-      "doc": "ONLINE_IDLE | ONLINE_PICKUP | ONLINE_DELIVERING | OFFLINE"
+      "type": {
+        "type": "enum",
+        "name": "CourierStatus",
+        "symbols": ["ONLINE_IDLE", "ONLINE_PICKUP", "ONLINE_DELIVERING", "OFFLINE"],
+        "doc": "Courier operational state at event_time."
+      }
     },
     {
       "name": "vehicle_type",
-      "type": "string",
-      "doc": "BICYCLE | MOTORCYCLE | CAR | SCOOTER"
+      "type": {
+        "type": "enum",
+        "name": "VehicleType",
+        "symbols": ["BICYCLE", "MOTORCYCLE", "CAR", "SCOOTER"],
+        "doc": "Courier vehicle type. Affects ETA model and speed thresholds."
+      }
     },
     {
       "name": "battery_pct",
       "type": "int",
-      "doc": "Device battery 0\u2013100. Low battery correlates with OFFLINE events."
+      "doc": "Device battery 0-100. Low battery correlates with OFFLINE events."
     },
     {
       "name": "network_type",
-      "type": "string",
-      "doc": "5G | 4G | 3G | NO_SIGNAL. NO_SIGNAL = source of GPS gaps."
+      "type": {
+        "type": "enum",
+        "name": "NetworkType",
+        "symbols": ["FIVE_G", "FOUR_G", "THREE_G", "NO_SIGNAL"],
+        "doc": "NO_SIGNAL is the primary cause of GPS gaps and late arrivals."
+      }
     },
     {
       "name": "is_duplicate",
       "type": "boolean",
-      "default": false
+      "default": false,
+      "doc": "Producer-side retry flag — use for dedup operators."
     }
   ]
 }
