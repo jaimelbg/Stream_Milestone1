@@ -1,0 +1,8 @@
+config.py
+__pycache__/
+*.pyc
+local_events/
+local_output/
+checkpoint/
+output/
+*.log
