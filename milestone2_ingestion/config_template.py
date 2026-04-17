@@ -6,19 +6,19 @@
 # avro_producer.py), so they do not import this file.
 
 # Azure Event Hubs
-event_hub_namespace = ''  # e.g., 'iesstsabbadbaa-grp-01-05'
+event_hub_namespace = 'iesstsabbadbaa-grp-01-05'
 
 # Order Lifecycle Topic
-order_topic = ''                  # e.g., 'group_03_order_lifecycle'
-order_producer_conn_str = ''      # SAS connection string, Send claim
-order_consumer_conn_str = ''      # SAS connection string, Listen claim
+order_topic = 'group_03_orders'
+order_producer_conn_str = ''      # SAS connection string, Send claim, ends with ;EntityPath=group_03_orders
+order_consumer_conn_str = ''      # SAS connection string, Listen claim, ends with ;EntityPath=group_03_orders
 
 # Courier Location Topic
-courier_topic = ''                # e.g., 'group_03_courier_location'
-courier_producer_conn_str = ''
-courier_consumer_conn_str = ''
+courier_topic = 'group_03_couriers'
+courier_producer_conn_str = ''    # ends with ;EntityPath=group_03_couriers
+courier_consumer_conn_str = ''    # ends with ;EntityPath=group_03_couriers
 
 # Azure Blob Storage
-account_name = ''                 # e.g., 'iesstsabbadbaa'
+account_name = 'iesstsabbadbaa'
 account_key = ''
-container_name = ''               # e.g., 'group03output'
+container_name = 'group03output'
