@@ -27,29 +27,35 @@ from config import (
 
 
 # =============================================================================
-# BLOCK 2 — Spark setup (Notebook 2, Cells 7-8 pattern)
+# BLOCK 2 — Spark setup (pinned to Spark 3.5.1 for Colab compatibility)
 # =============================================================================
-# %%writefile is optional — useful if you want Colab to persist this cell to disk.
+# IMPORTANTE!!!!!!!!!!!!!!!!! In Colab, run this in its own cell BEFORE importing pyspark:
+#   !pip install -q pyspark==3.5.1
+# Colab's bundled Spark 4.x is incompatible with the Kafka/Avro connectors
+# we need (NoSuchFieldError: TASK_ATTEMPT_ID). Pin to 3.5.1 + Scala 2.12.
+
+import os
+os.environ["PYSPARK_SUBMIT_ARGS"] = (
+    "--packages "
+    "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1,"
+    "org.apache.spark:spark-avro_2.12:3.5.1,"
+    "org.apache.hadoop:hadoop-azure:3.3.6,"
+    "com.microsoft.azure:azure-storage:8.6.6 "
+    "pyspark-shell"
+)
 
 from pyspark.sql import SparkSession
 
-jar_dependencies = ",".join([
-    "org.apache.spark:spark-sql-kafka-0-10_2.13:4.1.1",
-    "org.apache.spark:spark-avro_2.13:4.1.1",
-    "org.apache.hadoop:hadoop-azure:3.3.1",
-    "com.microsoft.azure:azure-storage:8.6.6"
-])
-
-spark = SparkSession.builder \
-    .appName("StreamingAVROFromKafka") \
-    .config("spark.streaming.stopGracefullyOnShutdown", True) \
-    .config("spark.jars.packages", jar_dependencies) \
-    .config(f"fs.azure.account.key.{account_name}.blob.core.windows.net", account_key) \
-    .config("spark.sql.shuffle.partitions", 4) \
-    .master("local[*]") \
-    .getOrCreate()
+spark = (SparkSession.builder
+    .appName("StreamingAVROFromKafka")
+    .config("spark.streaming.stopGracefullyOnShutdown", True)
+    .config(f"fs.azure.account.key.{account_name}.blob.core.windows.net", account_key)
+    .config("spark.sql.shuffle.partitions", 4)
+    .master("local[*]")
+    .getOrCreate())
 
 spark.sparkContext.setLogLevel("WARN")
+print("Spark version:", spark.version)  # should print 3.5.1
 
 
 # =============================================================================
