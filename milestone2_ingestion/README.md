@@ -339,3 +339,83 @@ breaking change will be published under a versioned path
 - Schema evolution — coordinate with the ingestion team before producer
   changes; we will publish a versioned path rather than mutate columns in
   place.
+## 10. Analytics layer (Spark Structured Streaming → Blob)
+
+After the ingestion job (BLOCK 10) has been running and data is landing in Blob,
+the analytics cells extend the pipeline with six use-case streams that read from
+the same `order_df` / `courier_df` DataFrames and write aggregated Parquet to
+`wasbs://group03output@iesstsabbadbaa.blob.core.windows.net/analytics/`.
+
+### Setup (Block A)
+
+Stop any active ingestion queries, then run the imports cell:
+
+```python
+orders_ts   = order_df.withColumn("event_ts", col("event_time").cast(TimestampType()))
+couriers_ts = courier_df.withColumn("event_ts", col("event_time").cast(TimestampType()))
+
+base_path = f"wasbs://{container_name}@{account_name}.blob.core.windows.net/analytics"
+ckpt_path = f"wasbs://{container_name}@{account_name}.blob.core.windows.net/analytics-checkpoints"
+```
+
+### Use cases
+
+| UC  | Block | Window / slide        | Source       | Output path (under `analytics/`)  | Key columns |
+|-----|-------|-----------------------|--------------|-----------------------------------|-------------|
+| UC1 | B     | 5 min tumbling        | orders       | `uc1_revenue_by_zone`             | `zone_id`, `platform`, `order_count`, `total_revenue_eur`, `fee_to_revenue_pct` |
+| UC2 | C     | 10 min / 5 min slide  | orders       | `uc2_cancellation_rate`           | `zone_id`, `orders_placed`, `orders_cancelled`, `cancellation_rate_pct` |
+| UC3 | D     | 15 min tumbling       | orders       | `uc3_delivery_duration`           | `zone_id`, `avg_delivery_min`, `avg_prep_min`, `avg_customer_rating`, `late_deliveries` |
+| UC4 | E     | 15 min tumbling       | couriers     | `uc4_courier_availability`        | `zone_id`, `vehicle_type`, `unique_couriers`, `pings_idle/delivering/offline`, `avg_battery_pct` |
+| UC5 | —     | 5 min tumbling (×2)   | both         | `uc5_orders_waiting`, `uc5_couriers_available` | `zone_id`, `orders_waiting`, `couriers_available` |
+| UC6 | —     | 5 min tumbling        | orders       | `uc6_anomaly_raw`                 | `zone_id`, `avg_delivery_min` (anomaly flag applied at read time) |
+
+All streams write with `trigger(processingTime="30 seconds")` and use
+`outputMode("append")`. Each UC has a parallel in-memory sink (`format("memory")`)
+for the live dashboard cell.
+
+### Edge-case handling in the analytics layer
+
+| UC  | Filter applied |
+|-----|----------------|
+| UC1 | `~is_duplicate`; watermark 2 min |
+| UC2 | `~is_duplicate`; only `ORDER_PLACED` / `ORDER_CANCELLED` events; watermark 3 min |
+| UC3 | `~is_duplicate`; only `ORDER_DELIVERED`; `delivery_duration_seconds BETWEEN 1 AND 3599`; watermark 5 min |
+| UC4 | `~is_duplicate`; watermark 5 min; `speed_kmh > 200` treated as anomalous (flag only, not filtered out) |
+| UC5 | `~is_duplicate`; orders side: `PLACED/CONFIRMED/PREPARING`; couriers side: `ONLINE_IDLE` only |
+| UC6 | Same filter as UC3; anomaly = current window avg > 1.5× previous window avg (computed at read time via `Window.partitionBy("zone_id").orderBy("window_start")`) |
+
+### Live dashboard (Block F)
+
+Block F polls the in-memory tables every 30 seconds (5 refreshes) and prints
+UC1–UC4 to the notebook. After the stream has accumulated at least one 5-minute
+window, re-run the Blob-read cell to verify Parquet landed:
+
+```python
+spark.read.parquet(f"{base_path}/uc1_revenue_by_zone").orderBy("window_start", ascending=False).show(10, truncate=False)
+spark.read.parquet(f"{base_path}/uc2_cancellation_rate").orderBy("cancellation_rate_pct", ascending=False).show(10, truncate=False)
+spark.read.parquet(f"{base_path}/uc3_delivery_duration").orderBy("avg_delivery_min", ascending=False).show(10, truncate=False)
+spark.read.parquet(f"{base_path}/uc4_courier_availability").orderBy("window_start", ascending=False).show(10, truncate=False)
+```
+
+### Visualisation charts
+
+After running the dashboard cell, install `matplotlib` + `seaborn` and run the
+chart cells (one per UC) to produce and save PNG files:
+
+| File saved                    | Content |
+|-------------------------------|---------|
+| `uc1_revenue_by_zone.png`     | Total revenue & order count by zone (bar); revenue split by platform (stacked bar) |
+| `uc2_cancellation_rate.png`   | Cancellation rate % (horizontal bar, RAG-coloured); placed vs cancelled; cancellation reasons by zone |
+| `uc3_delivery_duration.png`   | Avg prep vs delivery time (grouped bar); avg customer rating; late delivery rate % |
+| `uc4_courier_fleet.png`       | Courier status pings (stacked bar); speed heatmap by zone × vehicle; battery heatmap; low-battery & no-signal alerts |
+| `uc5_demand_supply.png`       | Orders waiting vs couriers available; demand/supply ratio; zone health status (HEALTHY / STRESSED / OVERLOADED) |
+| `uc6_anomaly_detection.png`   | Delivery time over time per zone (anomalies marked ✕); anomaly count by zone; % change vs previous window |
+
+RAG thresholds used in charts:
+
+| Metric | Green | Amber | Red |
+|--------|-------|-------|-----|
+| Cancellation rate | < 8% | 8–15% | > 15% |
+| Demand/supply ratio | ≤ 1.0 | 1.0–2.0 | > 2.0 |
+| Late delivery rate | < 10% | — | > 20% |
+| Delivery time spike | — | > 0% | > 50% (anomaly) |
