@@ -241,8 +241,8 @@ st_autorefresh(interval=refresh_interval_s * 1000, key="main_refresh")
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
-@st.cache_data(ttl=30, show_spinner=False)
-def load_blob_parquet(prefix: str) -> pd.DataFrame:
+@st.cache_data(ttl=300, show_spinner=False)
+def load_blob_parquet(prefix: str, max_files: int = 200) -> pd.DataFrame:
     if not ACCOUNT_KEY:
         st.error("AZURE_STORAGE_KEY is not set in .env")
         return pd.DataFrame()
@@ -251,12 +251,17 @@ def load_blob_parquet(prefix: str) -> pd.DataFrame:
             account_url=f"https://{ACCOUNT_NAME}.blob.core.windows.net",
             credential=ACCOUNT_KEY,
         )
-        cc     = svc.get_container_client(CONTAINER)
+        cc    = svc.get_container_client(CONTAINER)
+        blobs = sorted(
+            [b for b in cc.list_blobs(name_starts_with=prefix)
+             if b.name.endswith(".parquet") and b.size > 0],
+            key=lambda b: b.last_modified,
+            reverse=True,
+        )[:max_files]
         frames = []
-        for blob in cc.list_blobs(name_starts_with=prefix):
-            if blob.name.endswith(".parquet") and blob.size > 0:
-                raw = cc.get_blob_client(blob.name).download_blob().readall()
-                frames.append(pd.read_parquet(io.BytesIO(raw)))
+        for blob in blobs:
+            raw = cc.get_blob_client(blob.name).download_blob().readall()
+            frames.append(pd.read_parquet(io.BytesIO(raw)))
         return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     except Exception as exc:
         st.error(f"Azure error: {exc}")
