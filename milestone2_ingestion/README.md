@@ -5,6 +5,13 @@ events and courier GPS pings flow from Python producers → Azure Event Hubs
 (Kafka protocol) → Spark Structured Streaming → partitioned Parquet files in
 Azure Blob Storage.
 
+## 🚴 Live Analytics Dashboard
+**[→ Open Dashboard](https://streamdashboard-group3.streamlit.app/)**
+Real-time visualization · Azure Event Hubs + Spark Structured Streaming · Section 2.4
+
+---
+
+
 Event Hub namespace: **`iesstsabbadbaa-grp-01-05`**.
 
 ## Architecture
